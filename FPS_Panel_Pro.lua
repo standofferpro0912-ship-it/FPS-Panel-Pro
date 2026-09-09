@@ -1168,7 +1168,7 @@ Invisibility=function(enabled)
 end
 
 --========================================================
--- ESP SYSTEM 5.0 — clean screen-space tactical overlay
+-- ESP SYSTEM 6.0 — premium clean screen-space overlay
 --========================================================
 -- The ESP is intentionally isolated from the aimbot. It owns its own ScreenGui,
 -- update state and per-player primitives. No ESP code writes Camera.CFrame.
@@ -1261,25 +1261,37 @@ local function HideEntry(e)
 end
 
 local function SetLine(line,a,b,thickness,color)
+    if not line then return end
     local d=b-a
     local length=d.Magnitude
-    if length<1 then
+    if length < 0.5 then
         line.Visible=false
         return
     end
+    line.AnchorPoint=Vector2.new(0.5,0.5)
     line.Position=UDim2.fromOffset((a.X+b.X)*0.5,(a.Y+b.Y)*0.5)
-    line.Size=UDim2.fromOffset(length,thickness)
+    line.Size=UDim2.fromOffset(length,math.max(1,thickness))
     line.Rotation=math.deg(math.atan2(d.Y,d.X))
     line.BackgroundColor3=color
     line.Visible=true
 end
 
 local function MakeLinePair(parent,z,color)
+    -- Clean two-pass line: a very thin dark under-stroke + crisp foreground.
+    -- No chunky shadows, no glow spam, no oversized segments.
     local shadow=NewESPFrame(parent,z)
-    shadow.BackgroundColor3=Color3.new(0,0,0)
+    shadow.BackgroundColor3=Color3.fromRGB(0,0,0)
+    shadow.BackgroundTransparency=0.15
     local main=NewESPFrame(parent,z+1)
     main.BackgroundColor3=color or C.Accent
     return {main=main,shadow=shadow}
+end
+
+local function HidePair(pair)
+    if pair then
+        HideObject(pair.main)
+        HideObject(pair.shadow)
+    end
 end
 
 local function BuildEntry(player,char)
@@ -1386,12 +1398,12 @@ local function BuildEntry(player,char)
     arrow:SetAttribute("FPSESPManaged",true)
     e.arrow=arrow
 
-    for i=1,8 do
+    for i=1,4 do
         e.box[i]=MakeLinePair(espCanvas,70,ESPColor(player))
     end
     e.tracer=MakeLinePair(espCanvas,60,ESPColor(player))
     for i=1,math.max(#R15Bones,#R6Bones) do
-        e.skeleton[i]=NewESPFrame(espCanvas,65)
+        e.skeleton[i]=MakeLinePair(espCanvas,65,ESPColor(player))
     end
     
     local ownedList={card,accent,name,dist,hpBack,hp,hpText,dot,arrow}
@@ -1430,70 +1442,128 @@ end
 
 local function GetBounds(cam,char,view)
     local ok,cf,size=pcall(function() return char:GetBoundingBox() end)
-    if not ok then return nil end
-    local hx,hy,hz=size.X*.5,size.Y*.5,size.Z*.5
+    if not ok or not cf or not size then return nil end
+
+    local hx,hy,hz=size.X*0.5,size.Y*0.5,size.Z*0.5
     local minX,minY=math.huge,math.huge
     local maxX,maxY=-math.huge,-math.huge
-    local count=0
-    for sx=-1,1,2 do for sy=-1,1,2 do for sz=-1,1,2 do
-        local p=cam:WorldToViewportPoint((cf*CFrame.new(sx*hx,sy*hy,sz*hz)).Position)
-        if p.Z>0 then
-            count=count+1
-            minX=math.min(minX,p.X); minY=math.min(minY,p.Y)
-            maxX=math.max(maxX,p.X); maxY=math.max(maxY,p.Y)
+    local visibleCorners=0
+
+    for sx=-1,1,2 do
+        for sy=-1,1,2 do
+            for sz=-1,1,2 do
+                local world=(cf*CFrame.new(sx*hx,sy*hy,sz*hz)).Position
+                local p=cam:WorldToViewportPoint(world)
+                if p.Z>0 then
+                    visibleCorners+=1
+                    if p.X<minX then minX=p.X end
+                    if p.Y<minY then minY=p.Y end
+                    if p.X>maxX then maxX=p.X end
+                    if p.Y>maxY then maxY=p.Y end
+                end
+            end
         end
-    end end end
-    if count==0 or maxX-minX<4 or maxY-minY<8 then return nil end
-    return math.clamp(minX,-100,view.X+100),math.clamp(minY,-100,view.Y+100),math.clamp(maxX,-100,view.X+100),math.clamp(maxY,-100,view.Y+100)
+    end
+
+    if visibleCorners==0 then return nil end
+
+    -- Prevent camera-near targets from producing absurd GUI sizes.
+    minX=math.clamp(minX,-80,view.X+80)
+    maxX=math.clamp(maxX,-80,view.X+80)
+    minY=math.clamp(minY,-80,view.Y+80)
+    maxY=math.clamp(maxY,-80,view.Y+80)
+
+    if maxX-minX<6 or maxY-minY<10 then return nil end
+    return minX,minY,maxX,maxY
 end
 
 local function UpdateBox(e,b,color)
     if not Config.ESPBoxes or not b then
-        for _,pair in ipairs(e.box) do HideObject(pair.main); HideObject(pair.shadow) end
+        for _,pair in ipairs(e.box) do HidePair(pair) end
         return
     end
-    local minX,minY,maxX,maxY=b
-    local w,h=maxX-minX,maxY-minY
-    local c=math.clamp(math.min(w*.25,h*.18),8,30)
-    local t=math.clamp(math.min(w,h)*.014,2,3)
+
+    local minX,minY,maxX,maxY=table.unpack(b)
+    local width=maxX-minX
+    local height=maxY-minY
+    if width < 6 or height < 10 then
+        for _,pair in ipairs(e.box) do HidePair(pair) end
+        return
+    end
+
+    -- Full clean rectangle, anchored to the actual character bounds.
+    -- Slightly stronger on large targets, never becomes a fat block.
+    local thickness=math.clamp(math.floor(math.min(width,height)*0.0105 + 0.5),1,2)
+    local inset=0.5
     local defs={
-        {minX,minY,minX+c,minY},{minX,minY,minX,minY+c},
-        {maxX-c,minY,maxX,minY},{maxX,minY,maxX,minY+c},
-        {minX,maxY,minX+c,maxY},{minX,maxY-c,minX,maxY},
-        {maxX-c,maxY,maxX,maxY},{maxX,maxY-c,maxX,maxY},
+        {Vector2.new(minX+inset,minY+inset),Vector2.new(maxX-inset,minY+inset)},
+        {Vector2.new(maxX-inset,minY+inset),Vector2.new(maxX-inset,maxY-inset)},
+        {Vector2.new(maxX-inset,maxY-inset),Vector2.new(minX+inset,maxY-inset)},
+        {Vector2.new(minX+inset,maxY-inset),Vector2.new(minX+inset,minY+inset)},
     }
-    for i,d in ipairs(defs) do
+
+    for i,def in ipairs(defs) do
         local pair=e.box[i]
-        SetLine(pair.shadow,Vector2.new(d[1]+1,d[2]+1),Vector2.new(d[3]+1,d[4]+1),t+1,Color3.new(0,0,0))
-        SetLine(pair.main,Vector2.new(d[1],d[2]),Vector2.new(d[3],d[4]),t,color)
+        local a,b=def[1],def[2]
+        SetLine(pair.shadow,a+Vector2.new(1,1),b+Vector2.new(1,1),thickness+1,Color3.fromRGB(0,0,0))
+        SetLine(pair.main,a,b,thickness,color)
     end
 end
 
 local function UpdateTracer(e,point,color,view)
-    if not Config.ESPTracers or not point or point.X<0 or point.X>view.X or point.Y<0 or point.Y>view.Y then
-        HideObject(e.tracer.main); HideObject(e.tracer.shadow); return
+    if not Config.ESPTracers or not point then
+        HidePair(e.tracer)
+        return
     end
-    local from=Vector2.new(view.X*.5,view.Y-2)
-    SetLine(e.tracer.shadow,from+Vector2.new(1,1),point+Vector2.new(1,1),4,Color3.new(0,0,0))
-    SetLine(e.tracer.main,from,point,2,color)
+
+    -- Tracer starts just inside the bottom edge, like a competitive FPS overlay.
+    local from=Vector2.new(view.X*0.5,view.Y-1)
+    local to=Vector2.new(math.clamp(point.X,-40,view.X+40),math.clamp(point.Y,-40,view.Y+40))
+    if to.X < -40 or to.X > view.X+40 or to.Y < -40 or to.Y > view.Y+40 then
+        HidePair(e.tracer)
+        return
+    end
+
+    if (to-from).Magnitude < 5 then
+        HidePair(e.tracer)
+        return
+    end
+
+    SetLine(e.tracer.shadow,from+Vector2.new(1,1),to+Vector2.new(1,1),2.5,Color3.fromRGB(0,0,0))
+    SetLine(e.tracer.main,from,to,1.25,color)
 end
 
 local function UpdateSkeleton(e,char,color,cam,view)
     local defs=char:FindFirstChild("UpperTorso") and R15Bones or R6Bones
     if not Config.ESPSkeleton then
-        for _,line in ipairs(e.skeleton) do HideObject(line) end
+        for _,pair in ipairs(e.skeleton) do HidePair(pair) end
         return
     end
-    for i,line in ipairs(e.skeleton) do
-        local pair=defs[i]
-        if not pair then HideObject(line) else
-            local a=char:FindFirstChild(pair[1]); local b=char:FindFirstChild(pair[2])
-            if a and b then
-                local pa=cam:WorldToViewportPoint(a.Position); local pb=cam:WorldToViewportPoint(b.Position)
-                if pa.Z>0 and pb.Z>0 and pa.X>-100 and pa.X<view.X+100 and pa.Y>-100 and pa.Y<view.Y+100 and pb.X>-100 and pb.X<view.X+100 and pb.Y>-100 and pb.Y<view.Y+100 then
-                    SetLine(line,Vector2.new(pa.X,pa.Y),Vector2.new(pb.X,pb.Y),1.75,color)
-                else HideObject(line) end
-            else HideObject(line) end
+
+    for i,pair in ipairs(e.skeleton) do
+        local bone=defs[i]
+        if not bone then
+            HidePair(pair)
+        else
+            local a=char:FindFirstChild(bone[1])
+            local b=char:FindFirstChild(bone[2])
+            if not a or not b then
+                HidePair(pair)
+            else
+                local pa=cam:WorldToViewportPoint(a.Position)
+                local pb=cam:WorldToViewportPoint(b.Position)
+                local av=pa.Z>0 and pa.X>-80 and pa.X<view.X+80 and pa.Y>-80 and pa.Y<view.Y+80
+                local bv=pb.Z>0 and pb.X>-80 and pb.X<view.X+80 and pb.Y>-80 and pb.Y<view.Y+80
+                if not av or not bv then
+                    HidePair(pair)
+                else
+                    local va=Vector2.new(pa.X,pa.Y)
+                    local vb=Vector2.new(pb.X,pb.Y)
+                    -- Very clean bone rendering: 1px dark contour + 1px accent line.
+                    SetLine(pair.shadow,va+Vector2.new(1,1),vb+Vector2.new(1,1),2.5,Color3.fromRGB(0,0,0))
+                    SetLine(pair.main,va,vb,1.25,color)
+                end
+            end
         end
     end
 end
@@ -1566,8 +1636,12 @@ UpdateESP=function()
                         e.hpText.Text=string.format("%d / %d",math.floor(hum.Health+.5),math.floor(hum.MaxHealth+.5))
                         e.headDot.Visible=Config.ESPHeadDot and headP.Z>0
                         if e.headDot.Visible then e.headDot.Position=UDim2.fromOffset(headP.X,headP.Y); e.headDot.BackgroundColor3=color end
-                        local b={GetBounds(cam,char,view)}
-                        UpdateBox(e,#b==4 and b or nil,color)
+                        local minX,minY,maxX,maxY=GetBounds(cam,char,view)
+                        if minX then
+                            UpdateBox(e,{minX,minY,maxX,maxY},color)
+                        else
+                            UpdateBox(e,nil,color)
+                        end
                         UpdateTracer(e,Vector2.new(rootP.X,rootP.Y),color,view)
                         UpdateSkeleton(e,char,color,cam,view)
                     else
