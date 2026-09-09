@@ -74,19 +74,18 @@ local Config = {
     PersistenceFile = "FPSPanel_profiles.json",
     ActiveProfile = "Default",
 
-    -- ESP 2.0: clean tactical nameplate style (boxes/tracers disabled by default)
+    -- ESP 5.0
     ESPBoxes = true,
     ESPTracers = true,
+    ESPSkeleton = true,
     ESPNames = true,
-    ESPDistance = true,
     ESPHealth = true,
-    ESPTeamColor = true,
-    ESPHighlight = true,
+    ESPDistance = true,
     ESPOffscreen = true,
     ESPHeadDot = false,
-    ESPSkeleton = true,
-    ESPMaxDistance = 500,
-    ESPUpdateRate = 0.10,
+    ESPTeamColor = true,
+    ESPMaxDistance = 600,
+    ESPUpdateRate = 0.06,
 
     AutoSprint = false,
     FOVKick = false,
@@ -523,28 +522,22 @@ Toggle(Pages.Combat,"Smooth Aim","Moves the camera toward the target instead of 
 Slider(Pages.Combat,"Aim Smoothness","Higher values feel faster and more responsive.",1,20,1,function() return Config.AimSmoothness end,function(v) Config.AimSmoothness=v end)
 Info(Pages.Combat,"Target validation","Requires a live, visible and on-screen player.",C.Good)
 
-Section(Pages.Visuals,"PLAYER ESP 3.0","Pooled tactical overlay — clean, precise and teardown-safe")
-Toggle(Pages.Visuals,"ESP","Master switch for the local ESP system.",function() return Config.ESP end,function(v)
+Section(Pages.Visuals,"PLAYER ESP 5.0","Premium tactical ESP — clean, responsive and independently switchable")
+Toggle(Pages.Visuals,"ESP","Master switch for the complete player ESP system.",function() return Config.ESP end,function(v)
     Config.ESP=v
-    if v then
-        task.defer(function() pcall(UpdateESP) end)
-    else
-        -- Master OFF is immediate: destroy the complete player pool now.
-        pcall(ClearAllESP)
-    end
+    if v then task.defer(function() pcall(UpdateESP) end) else pcall(ClearAllESP) end
 end)
-Toggle(Pages.Visuals,"Nameplates","Floating player card with name and status.",function() return Config.ESPNames end,function(v) Config.ESPNames=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Health","Show compact HP bar and values.",function() return Config.ESPHealth end,function(v) Config.ESPHealth=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Distance","Show distance beside the player card.",function() return Config.ESPDistance end,function(v) Config.ESPDistance=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Highlight","Subtle full-body outline instead of a box.",function() return Config.ESPHighlight end,function(v) Config.ESPHighlight=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Off-Screen Arrows","Shows a directional arrow for players outside the viewport.",function() return Config.ESPOffscreen end,function(v) Config.ESPOffscreen=v; task.defer(function() pcall(UpdateESP) end) end)
+Toggle(Pages.Visuals,"2D Boxes","Corner boxes locked to the projected character bounds.",function() return Config.ESPBoxes end,function(v) Config.ESPBoxes=v; task.defer(function() pcall(UpdateESP) end) end)
+Toggle(Pages.Visuals,"Tracers","Screen-space lines from the bottom-center to each visible target.",function() return Config.ESPTracers end,function(v) Config.ESPTracers=v; task.defer(function() pcall(UpdateESP) end) end)
+Toggle(Pages.Visuals,"Skeleton","Lightweight R6/R15 bone overlay.",function() return Config.ESPSkeleton end,function(v) Config.ESPSkeleton=v; task.defer(function() pcall(UpdateESP) end) end)
+Toggle(Pages.Visuals,"Nameplates","Player name, distance and health in a compact card.",function() return Config.ESPNames or Config.ESPHealth or Config.ESPDistance end,function(v)
+    Config.ESPNames=v; Config.ESPHealth=v; Config.ESPDistance=v; task.defer(function() pcall(UpdateESP) end)
+end)
+Toggle(Pages.Visuals,"Off-Screen Arrows","Directional indicators for players outside the viewport.",function() return Config.ESPOffscreen end,function(v) Config.ESPOffscreen=v; task.defer(function() pcall(UpdateESP) end) end)
 Toggle(Pages.Visuals,"Head Dot","Small precise head marker.",function() return Config.ESPHeadDot end,function(v) Config.ESPHeadDot=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Skeleton ESP","Draws a lightweight bone skeleton using screen-space lines.",function() return Config.ESPSkeleton end,function(v) Config.ESPSkeleton=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"2D Boxes","Clean corner-box ESP. Uses real character bounds.",function() return Config.ESPBoxes end,function(v) Config.ESPBoxes=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Tracers","Draws a subtle line from the bottom of the screen to targets.",function() return Config.ESPTracers end,function(v) Config.ESPTracers=v; task.defer(function() pcall(UpdateESP) end) end)
-Toggle(Pages.Visuals,"Team Colors","Use team color when available.",function() return Config.ESPTeamColor end,function(v) Config.ESPTeamColor=v; task.defer(function() pcall(UpdateESP) end) end)
-Slider(Pages.Visuals,"Max Distance","Do not render ESP beyond this distance.",50,1000,10,function() return Config.ESPMaxDistance end,function(v) Config.ESPMaxDistance=v; task.defer(function() pcall(UpdateESP) end) end)
-Info(Pages.Visuals,"Performance","ESP 3.0 reuses one per-player pool, avoids per-frame player allocation and fully tears down disabled features.",C.Accent)
+Toggle(Pages.Visuals,"Team Colors","Use Roblox TeamColor for each player's ESP.",function() return Config.ESPTeamColor end,function(v) Config.ESPTeamColor=v; task.defer(function() pcall(UpdateESP) end) end)
+Slider(Pages.Visuals,"Max Distance","Do not render ESP beyond this range.",50,1500,10,function() return Config.ESPMaxDistance end,function(v) Config.ESPMaxDistance=v; task.defer(function() pcall(UpdateESP) end) end)
+Info(Pages.Visuals,"ESP 5.0","Independent screen-space primitives, deterministic cleanup, R6/R15 support, respawn-safe object ownership and mobile-safe scaling.",C.Good)
 
 Section(Pages.Movement,"MOVEMENT","Movement and collision controls")
 Toggle(Pages.Movement,"Speed","Changes Humanoid WalkSpeed while enabled.",function() return Config.Speed end,function(v) Config.Speed=v end)
@@ -1175,159 +1168,48 @@ Invisibility=function(enabled)
 end
 
 --========================================================
+-- ESP SYSTEM 5.0 — clean screen-space tactical overlay
 --========================================================
--- ESP SYSTEM 5.0 — direct-screen, render-first, teardown-safe
---========================================================
--- This ESP is deliberately isolated from the aimbot.
--- Aimbot state, camera state, aim settings and aim render bindings are untouched.
--- Every visible primitive is parented directly to ONE dedicated ScreenGui.
--- That avoids nested-frame clipping/scaling problems on mobile and makes
--- visibility deterministic.
+-- The ESP is intentionally isolated from the aimbot. It owns its own ScreenGui,
+-- update state and per-player primitives. No ESP code writes Camera.CFrame.
 
-local function DestroyManagedESPChildren(parent)
-    if not parent then return end
-    for _,obj in ipairs(parent:GetDescendants()) do
-        if obj ~= parent and obj:GetAttribute("FPSESPManaged") then
-            pcall(function() obj:Destroy() end)
+local function DestroyOldESPOverlays()
+    pcall(function()
+        for _,obj in ipairs(PlayerGui:GetChildren()) do
+            if obj.Name=="FPSESPOverlay" or obj.Name=="FPSPremiumESP" then
+                obj:Destroy()
+            end
         end
-    end
-end
-
-local function DestroyManagedESPFromPlayerGui()
-    for _,obj in ipairs(PlayerGui:GetDescendants()) do
-        if obj:GetAttribute("FPSESPManaged") then
-            pcall(function() obj:Destroy() end)
+    end)
+    pcall(function()
+        for _,obj in ipairs(workspace:GetChildren()) do
+            if obj:IsA("Highlight") and obj:GetAttribute("FPSESPManaged") then
+                obj:Destroy()
+            end
         end
-    end
+    end)
 end
+DestroyOldESPOverlays()
 
-DestroyManagedESPFromPlayerGui()
-
-local ESPGui=New("ScreenGui",{
-    Name="FPSESPOverlay",
-    ResetOnSpawn=false,
-    IgnoreGuiInset=true,
-    DisplayOrder=1000,
-    ZIndexBehavior=Enum.ZIndexBehavior.Sibling,
-},PlayerGui)
+local ESPGui=Instance.new("ScreenGui")
+ESPGui.Name="FPSESPOverlay"
+ESPGui.ResetOnSpawn=false
+ESPGui.IgnoreGuiInset=true
+ESPGui.DisplayOrder=2000
+ESPGui.ZIndexBehavior=Enum.ZIndexBehavior.Global
+ESPGui.Parent=PlayerGui
 ESPGui:SetAttribute("FPSESPManaged",true)
 
+local espCanvas=Instance.new("Frame")
+espCanvas.Name="Canvas"
+espCanvas.Size=UDim2.fromScale(1,1)
+espCanvas.Position=UDim2.fromScale(0,0)
+espCanvas.BackgroundTransparency=1
+espCanvas.BorderSizePixel=0
+espCanvas.Active=false
+espCanvas.Parent=ESPGui
+
 local espObjects={}
-local espPlayerCache={}
-local espLastUpdate=0
-
-local function RefreshESPPlayerCache()
-    table.clear(espPlayerCache)
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr~=LocalPlayer then
-            espPlayerCache[#espPlayerCache+1]=plr
-        end
-    end
-end
-RefreshESPPlayerCache()
-
-Players.PlayerAdded:Connect(function(plr)
-    if plr~=LocalPlayer then
-        espPlayerCache[#espPlayerCache+1]=plr
-    end
-end)
-
-Players.PlayerRemoving:Connect(function(plr)
-    for i=#espPlayerCache,1,-1 do
-        if espPlayerCache[i]==plr then
-            table.remove(espPlayerCache,i)
-            break
-        end
-    end
-end)
-
-local function GetESPColor(player)
-    if not Config.ESPTeamColor then return C.Accent end
-    local ok,color=pcall(function()
-        return player.TeamColor and player.TeamColor.Color
-    end)
-    return ok and color or C.Accent
-end
-
-local function ESPNew(class,props,parent)
-    local obj=New(class,props,parent or ESPGui)
-    obj:SetAttribute("FPSESPManaged",true)
-    return obj
-end
-
-local function ESPHide(obj)
-    if obj then obj.Visible=false end
-end
-
-local function ESPHideAll(e)
-    if not e then return end
-    if e.card then e.card.Visible=false end
-    if e.headDot then e.headDot.Visible=false end
-    if e.arrow then e.arrow.Visible=false end
-    if e.highlight then e.highlight.Enabled=false end
-
-    if e.box then
-        for i=1,#e.box do ESPHide(e.box[i]) end
-    end
-    if e.tracer then
-        ESPHide(e.tracer)
-        ESPHide(e.tracerShadow)
-    end
-    if e.skeleton then
-        for _,line in ipairs(e.skeleton) do ESPHide(line) end
-    end
-end
-
-local function ESPLine(parent,z,thickness)
-    return ESPNew("Frame",{
-        AnchorPoint=Vector2.new(.5,.5),
-        BackgroundColor3=C.Accent,
-        BorderSizePixel=0,
-        Size=UDim2.fromOffset(2,thickness or 2),
-        Position=UDim2.fromOffset(0,0),
-        Rotation=0,
-        Visible=false,
-        ZIndex=z or 60,
-        Active=false,
-    },parent)
-end
-
-local function SetESPLine(line,a,b,thickness,color)
-    if not line then return end
-    local d=b-a
-    local len=d.Magnitude
-    if len<1 then
-        line.Visible=false
-        return
-    end
-    line.Position=UDim2.fromOffset((a.X+b.X)*.5,(a.Y+b.Y)*.5)
-    line.Size=UDim2.fromOffset(len,math.max(1,thickness or 2))
-    line.Rotation=math.deg(math.atan2(d.Y,d.X))
-    line.BackgroundColor3=color
-    line.Visible=true
-end
-
-local function BuildBox()
-    local box={}
-    for i=1,8 do
-        box[i]=ESPNew("Frame",{
-            BackgroundColor3=C.Accent,
-            BorderSizePixel=0,
-            Visible=false,
-            ZIndex=64,
-            Active=false,
-        })
-    end
-    return box
-end
-
-local function BuildSkeleton()
-    local skeleton={}
-    for i=1,15 do
-        skeleton[i]=ESPLine(nil,62,2)
-    end
-    return skeleton
-end
 
 local R15Bones={
     {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
@@ -1336,459 +1218,382 @@ local R15Bones={
     {"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},
     {"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"},
 }
-
 local R6Bones={
-    {"Head","Torso"},
-    {"Torso","Left Arm"},{"Left Arm","Left Leg"},
-    {"Torso","Right Arm"},{"Right Arm","Right Leg"},
+    {"Head","Torso"},{"Torso","Left Arm"},{"Torso","Right Arm"},
     {"Torso","Left Leg"},{"Torso","Right Leg"},
 }
 
-local function GetBones(char)
-    if char and char:FindFirstChild("UpperTorso") and char:FindFirstChild("LowerTorso") then
-        return R15Bones
+local function ESPColor(player)
+    if Config.ESPTeamColor and player.TeamColor then
+        return player.TeamColor.Color
     end
-    return R6Bones
+    return C.Accent
 end
 
-local function ProjectPoint(cam,world)
-    local p,on=cam:WorldToViewportPoint(world)
-    return Vector2.new(p.X,p.Y),p.Z,on
+local function NewESPFrame(parent,z)
+    local f=Instance.new("Frame")
+    f.BackgroundColor3=C.Accent
+    f.BackgroundTransparency=0
+    f.BorderSizePixel=0
+    f.Visible=false
+    f.Active=false
+    f.ZIndex=z or 10
+    f.Parent=parent
+    f:SetAttribute("FPSESPManaged",true)
+    return f
 end
 
-local function GetCharacterBounds(cam,char,view)
-    local ok,cf,size=pcall(function()
-        return char:GetBoundingBox()
-    end)
-    if not ok or not cf or not size then return nil end
-
-    local hx,hy,hz=size.X*.5,size.Y*.5,size.Z*.5
-    local minX,minY=math.huge,math.huge
-    local maxX,maxY=-math.huge,-math.huge
-    local frontCount=0
-
-    for _,sx in ipairs({-1,1}) do
-        for _,sy in ipairs({-1,1}) do
-            for _,sz in ipairs({-1,1}) do
-                local wp=(cf*CFrame.new(hx*sx,hy*sy,hz*sz)).Position
-                local p=cam:WorldToViewportPoint(wp)
-                if p.Z>0 then
-                    frontCount+=1
-                    minX=math.min(minX,p.X)
-                    minY=math.min(minY,p.Y)
-                    maxX=math.max(maxX,p.X)
-                    maxY=math.max(maxY,p.Y)
-                end
-            end
-        end
-    end
-
-    if frontCount==0 then return nil end
-    if maxX-minX<4 or maxY-minY<8 then return nil end
-
-    -- Allow a generous offscreen margin while preventing giant GUI primitives.
-    minX=math.clamp(minX,-160,view.X+160)
-    maxX=math.clamp(maxX,-160,view.X+160)
-    minY=math.clamp(minY,-160,view.Y+160)
-    maxY=math.clamp(maxY,-160,view.Y+160)
-    return minX,minY,maxX,maxY
+local function HideObject(obj)
+    if obj then obj.Visible=false end
 end
 
-local function UpdateBox(e,minX,minY,maxX,maxY,color)
-    if not e.box then return end
-    if not Config.ESPBoxes or not minX then
-        for i=1,#e.box do ESPHide(e.box[i]) end
-        return
+local function HideEntry(e)
+    if not e then return end
+    if e.highlight then e.highlight.Enabled=false end
+    if e.card then e.card.Visible=false end
+    if e.headDot then e.headDot.Visible=false end
+    if e.arrow then e.arrow.Visible=false end
+    if e.box then
+        for _,q in ipairs(e.box) do HideObject(q.main); HideObject(q.shadow) end
     end
-
-    local w=maxX-minX
-    local h=maxY-minY
-    if w<4 or h<8 then
-        for i=1,#e.box do ESPHide(e.box[i]) end
-        return
-    end
-
-    local corner=math.clamp(math.min(w*.25,h*.16),10,36)
-    local thick=math.clamp(math.min(w,h)*.018,2,4)
-
-    local defs={
-        {minX,minY,minX+corner,minY},
-        {minX,minY,minX,minY+corner},
-        {maxX-corner,minY,maxX,minY},
-        {maxX,minY,maxX,minY+corner},
-        {minX,maxY,minX+corner,maxY},
-        {minX,maxY-corner,minX,maxY},
-        {maxX-corner,maxY,maxX,maxY},
-        {maxX,maxY-corner,maxX,maxY},
-    }
-
-    for i,d in ipairs(defs) do
-        SetESPLine(e.box[i],Vector2.new(d[1],d[2]),Vector2.new(d[3],d[4]),thick,color)
-    end
+    if e.tracer then HideObject(e.tracer.main); HideObject(e.tracer.shadow) end
+    if e.skeleton then for _,q in ipairs(e.skeleton) do HideObject(q) end end
 end
 
-local function UpdateTracer(e,target,color,view)
-    if not e.tracer or not Config.ESPTracers or not target then
-        ESPHide(e.tracer); ESPHide(e.tracerShadow)
+local function SetLine(line,a,b,thickness,color)
+    local d=b-a
+    local length=d.Magnitude
+    if length<1 then
+        line.Visible=false
         return
     end
-
-    local from=Vector2.new(view.X*.5,view.Y-3)
-    if target.X<-200 or target.X>view.X+200 or target.Y<-200 or target.Y>view.Y+200 then
-        ESPHide(e.tracer); ESPHide(e.tracerShadow)
-        return
-    end
-
-    SetESPLine(e.tracerShadow,from+Vector2.new(1,1),target+Vector2.new(1,1),4,Color3.new(0,0,0))
-    SetESPLine(e.tracer,from,target,2.2,color)
+    line.Position=UDim2.fromOffset((a.X+b.X)*0.5,(a.Y+b.Y)*0.5)
+    line.Size=UDim2.fromOffset(length,thickness)
+    line.Rotation=math.deg(math.atan2(d.Y,d.X))
+    line.BackgroundColor3=color
+    line.Visible=true
 end
 
-local function UpdateSkeleton(e,char,color,cam,view)
-    if not e.skeleton or not Config.ESPSkeleton then
-        if e.skeleton then for _,line in ipairs(e.skeleton) do ESPHide(line) end end
-        return
-    end
-
-    local bones=GetBones(char)
-    for i,line in ipairs(e.skeleton) do
-        local pair=bones[i]
-        if not pair then
-            ESPHide(line)
-        else
-            local a=char:FindFirstChild(pair[1])
-            local b=char:FindFirstChild(pair[2])
-            if a and b and a:IsA("BasePart") and b:IsA("BasePart") then
-                local pa,za,ona=ProjectPoint(cam,a.Position)
-                local pb,zb,onb=ProjectPoint(cam,b.Position)
-                local valid=za>0 and zb>0 and
-                    ((ona or onb) or
-                    (pa.X>-100 and pa.X<view.X+100 and pa.Y>-100 and pa.Y<view.Y+100 and
-                     pb.X>-100 and pb.X<view.X+100 and pb.Y>-100 and pb.Y<view.Y+100))
-                if valid then
-                    SetESPLine(line,pa,pb,2,color)
-                else
-                    ESPHide(line)
-                end
-            else
-                ESPHide(line)
-            end
-        end
-    end
+local function MakeLinePair(parent,z,color)
+    local shadow=NewESPFrame(parent,z)
+    shadow.BackgroundColor3=Color3.new(0,0,0)
+    local main=NewESPFrame(parent,z+1)
+    main.BackgroundColor3=color or C.Accent
+    return {main=main,shadow=shadow}
 end
 
-local function UpdateArrow(e,point,color,view,behind)
-    if not e.arrow or not Config.ESPOffscreen then
-        ESPHide(e.arrow)
-        return
+local function BuildEntry(player,char)
+    local old=espObjects[player]
+    if old and old.character==char then return old end
+    if old then
+        HideEntry(old)
+        if old.highlight then pcall(function() old.highlight:Destroy() end) end
+        for _,obj in ipairs(old.owned or {}) do pcall(function() obj:Destroy() end) end
     end
 
-    local center=Vector2.new(view.X*.5,view.Y*.5)
-    local d=point-center
-    if behind then d=-d end
-    if d.Magnitude<0.5 then
-        ESPHide(e.arrow)
-        return
-    end
+    local owned={}
+    local e={player=player,character=char,owned=owned,box={},skeleton={}}
 
-    local n=d.Unit
-    local margin=44
-    local halfW=math.max(1,view.X*.5-margin)
-    local halfH=math.max(1,view.Y*.5-margin)
-    local tx=math.abs(n.X)>1e-5 and halfW/math.abs(n.X) or math.huge
-    local ty=math.abs(n.Y)>1e-5 and halfH/math.abs(n.Y) or math.huge
-    local dist=math.min(tx,ty)
-    if dist==math.huge then
-        ESPHide(e.arrow)
-        return
-    end
-
-    local pos=center+n*dist
-    e.arrow.Position=UDim2.fromOffset(pos.X,pos.Y)
-    e.arrow.Rotation=math.deg(math.atan2(n.Y,n.X))+90
-    e.arrow.TextColor3=color
-    e.arrow.Visible=true
-end
-
-local function BuildESP(player,char)
-    if player==LocalPlayer or not char then return nil end
-
-    local existing=espObjects[player]
-    if existing and existing.character==char then
-        return existing
-    end
-    if existing then
-        pcall(function() existing.destroy() end)
-    end
-
-    local color=GetESPColor(player)
-    local e={
-        player=player,
-        character=char,
-        parts={},
-        box=BuildBox(),
-        skeleton=BuildSkeleton(),
-    }
-
-    e.tracerShadow=ESPLine(nil,58,4)
-    e.tracer=ESPLine(nil,59,2)
-
-    e.card=ESPNew("Frame",{
-        AnchorPoint=Vector2.new(.5,1),
-        Size=UDim2.fromOffset(196,60),
-        BackgroundColor3=Color3.fromRGB(10,12,16),
-        BackgroundTransparency=.08,
-        BorderSizePixel=0,
-        Visible=false,
-        ZIndex=55,
-        Active=false,
-    })
-    Corner(e.card,10); Outline(e.card,Color3.fromRGB(55,60,72))
-
-    e.accent=ESPNew("Frame",{
-        Size=UDim2.fromOffset(4,42),Position=UDim2.fromOffset(8,9),
-        BackgroundColor3=color,BorderSizePixel=0,ZIndex=56,
-    },e.card)
-    Corner(e.accent,2)
-
-    e.name=ESPNew("TextLabel",{
-        Size=UDim2.fromOffset(120,18),Position=UDim2.fromOffset(20,6),
-        BackgroundTransparency=1,Text=player.DisplayName,TextColor3=Color3.new(1,1,1),
-        TextSize=12,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Left,
-        TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=57,
-    },e.card)
-
-    e.user=ESPNew("TextLabel",{
-        Size=UDim2.fromOffset(120,14),Position=UDim2.fromOffset(20,24),
-        BackgroundTransparency=1,Text="@"..player.Name,TextColor3=Color3.fromRGB(145,150,165),
-        TextSize=9,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,
-        TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=57,
-    },e.card)
-
-    e.dist=ESPNew("TextLabel",{
-        Size=UDim2.fromOffset(56,16),Position=UDim2.fromOffset(130,7),
-        BackgroundTransparency=1,TextColor3=Color3.fromRGB(190,195,207),
-        TextSize=9,Font=Enum.Font.GothamBold,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=57,
-    },e.card)
-
-    e.hpBack=ESPNew("Frame",{
-        Size=UDim2.fromOffset(150,5),Position=UDim2.fromOffset(20,41),
-        BackgroundColor3=Color3.fromRGB(33,37,45),BorderSizePixel=0,ZIndex=56,
-    },e.card)
-    Corner(e.hpBack,3)
-
-    e.hpFill=ESPNew("Frame",{
-        Size=UDim2.fromScale(1,1),BackgroundColor3=C.Good,BorderSizePixel=0,ZIndex=57,
-    },e.hpBack)
-    Corner(e.hpFill,3)
-
-    e.hpText=ESPNew("TextLabel",{
-        Size=UDim2.fromOffset(52,13),Position=UDim2.fromOffset(118,47),
-        BackgroundTransparency=1,TextColor3=Color3.fromRGB(190,195,207),
-        TextSize=8,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=57,
-    },e.card)
-
-    e.teamDot=ESPNew("Frame",{
-        AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(7,7),Position=UDim2.fromOffset(184,49),
-        BackgroundColor3=color,BorderSizePixel=0,ZIndex=58,Visible=true,
-    },e.card)
-    Corner(e.teamDot,4)
-
-    e.headDot=ESPNew("Frame",{
-        AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(7,7),
-        BackgroundColor3=color,BorderSizePixel=0,ZIndex=66,Visible=false,
-    })
-    Corner(e.headDot,4)
-
-    e.arrow=ESPNew("TextLabel",{
-        AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(36,36),
-        BackgroundTransparency=1,Text="▲",TextColor3=color,
-        TextStrokeColor3=Color3.new(0,0,0),TextStrokeTransparency=.12,
-        TextSize=24,Font=Enum.Font.GothamBlack,ZIndex=68,Visible=false,
-    })
-
-    local highlight=ESPNew("Highlight",{
-        Name="FPSESPHighlight",
-        Adornee=char,
-        DepthMode=Enum.HighlightDepthMode.AlwaysOnTop,
-        FillTransparency=.94,
-        OutlineTransparency=.02,
-        FillColor=color,
-        OutlineColor=color,
-        Enabled=false,
-    },workspace)
+    local highlight=Instance.new("Highlight")
+    highlight.Name="FPSPanelPlayerHighlight"
+    highlight.Adornee=char
+    highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.FillTransparency=.86
+    highlight.OutlineTransparency=0
+    highlight.FillColor=ESPColor(player)
+    highlight.OutlineColor=ESPColor(player)
+    highlight.Enabled=false
+    highlight:SetAttribute("FPSESPManaged",true)
+    highlight.Parent=workspace
     e.highlight=highlight
 
-    local destroyed=false
-    e.destroy=function()
-        if destroyed then return end
-        destroyed=true
-        for _,obj in ipairs({
-            e.highlight,e.card,e.headDot,e.arrow,e.tracer,e.tracerShadow,
-        }) do SafeDestroy(obj) end
-        if e.box then for _,obj in ipairs(e.box) do SafeDestroy(obj) end end
-        if e.skeleton then for _,obj in ipairs(e.skeleton) do SafeDestroy(obj) end end
-    end
+    local card=NewESPFrame(espCanvas,80)
+    card.Size=UDim2.fromOffset(176,52)
+    card.BackgroundColor3=Color3.fromRGB(12,14,19)
+    card.BackgroundTransparency=.08
+    card.ZIndex=80
+    local stroke=Instance.new("UIStroke")
+    stroke.Color=Color3.fromRGB(70,74,86)
+    stroke.Thickness=1
+    stroke.Parent=card
+    local corner=Instance.new("UICorner")
+    corner.CornerRadius=UDim.new(0,9)
+    corner.Parent=card
+    local accent=NewESPFrame(card,81)
+    accent.Size=UDim2.fromOffset(3,34)
+    accent.Position=UDim2.fromOffset(8,9)
+    local name=Instance.new("TextLabel")
+    name.BackgroundTransparency=1
+    name.Position=UDim2.fromOffset(18,6)
+    name.Size=UDim2.fromOffset(106,17)
+    name.TextColor3=Color3.new(1,1,1)
+    name.TextSize=11
+    name.Font=Enum.Font.GothamBold
+    name.TextXAlignment=Enum.TextXAlignment.Left
+    name.TextTruncate=Enum.TextTruncate.AtEnd
+    name.ZIndex=82
+    name.Parent=card
+    local dist=Instance.new("TextLabel")
+    dist.BackgroundTransparency=1
+    dist.Position=UDim2.fromOffset(118,7)
+    dist.Size=UDim2.fromOffset(48,15)
+    dist.TextColor3=Color3.fromRGB(190,195,205)
+    dist.TextSize=8
+    dist.Font=Enum.Font.GothamBold
+    dist.TextXAlignment=Enum.TextXAlignment.Right
+    dist.ZIndex=82
+    dist.Parent=card
+    local hpBack=NewESPFrame(card,81)
+    hpBack.Size=UDim2.fromOffset(126,5)
+    hpBack.Position=UDim2.fromOffset(18,29)
+    hpBack.BackgroundColor3=Color3.fromRGB(35,38,46)
+    local hp=NewESPFrame(hpBack,82)
+    hp.Size=UDim2.fromScale(1,1)
+    local hpText=Instance.new("TextLabel")
+    hpText.BackgroundTransparency=1
+    hpText.Position=UDim2.fromOffset(18,36)
+    hpText.Size=UDim2.fromOffset(148,13)
+    hpText.TextColor3=Color3.fromRGB(180,186,198)
+    hpText.TextSize=8
+    hpText.Font=Enum.Font.Gotham
+    hpText.TextXAlignment=Enum.TextXAlignment.Left
+    hpText.ZIndex=82
+    hpText.Parent=card
+    e.card=card
+    e.name=name
+    e.dist=dist
+    e.hpBack=hpBack
+    e.hp=hp
+    e.hpText=hpText
 
+    local dot=NewESPFrame(espCanvas,90)
+    dot.Size=UDim2.fromOffset(7,7)
+    dot.AnchorPoint=Vector2.new(.5,.5)
+    local dotCorner=Instance.new("UICorner"); dotCorner.CornerRadius=UDim.new(1,0); dotCorner.Parent=dot
+    e.headDot=dot
+
+    local arrow=Instance.new("TextLabel")
+    arrow.BackgroundTransparency=1
+    arrow.AnchorPoint=Vector2.new(.5,.5)
+    arrow.Size=UDim2.fromOffset(34,34)
+    arrow.Text="▲"
+    arrow.TextSize=24
+    arrow.Font=Enum.Font.GothamBlack
+    arrow.TextStrokeTransparency=.1
+    arrow.ZIndex=95
+    arrow.Visible=false
+    arrow.Parent=espCanvas
+    arrow:SetAttribute("FPSESPManaged",true)
+    e.arrow=arrow
+
+    for i=1,8 do
+        e.box[i]=MakeLinePair(espCanvas,70,ESPColor(player))
+    end
+    e.tracer=MakeLinePair(espCanvas,60,ESPColor(player))
+    for i=1,math.max(#R15Bones,#R6Bones) do
+        e.skeleton[i]=NewESPFrame(espCanvas,65)
+    end
+    
+    local ownedList={card,accent,name,dist,hpBack,hp,hpText,dot,arrow}
+    for _,pair in ipairs(e.box) do ownedList[#ownedList+1]=pair.main; ownedList[#ownedList+1]=pair.shadow end
+    ownedList[#ownedList+1]=e.tracer.main; ownedList[#ownedList+1]=e.tracer.shadow
+    for _,line in ipairs(e.skeleton) do ownedList[#ownedList+1]=line end
+    e.owned=ownedList
     espObjects[player]=e
     return e
 end
 
-RemoveESP=function(player)
+local function RemoveESP(player)
     local e=espObjects[player]
     if not e then return end
     espObjects[player]=nil
-    pcall(function() e.destroy() end)
+    if e.highlight then pcall(function() e.highlight:Destroy() end) end
+    for _,obj in ipairs(e.owned or {}) do pcall(function() obj:Destroy() end) end
 end
 
 ClearAllESP=function()
-    local list={}
-    for player in pairs(espObjects) do list[#list+1]=player end
-    for _,player in ipairs(list) do RemoveESP(player) end
-
-    -- Final safety sweep for any managed object that escaped the registry.
-    DestroyManagedESPChildren(ESPGui)
+    local players={}
+    for player in pairs(espObjects) do players[#players+1]=player end
+    for _,player in ipairs(players) do RemoveESP(player) end
+    table.clear(espObjects)
+    pcall(function()
+        for _,obj in ipairs(espCanvas:GetChildren()) do
+            if obj:GetAttribute("FPSESPManaged") then obj:Destroy() end
+        end
+    end)
     for _,obj in ipairs(workspace:GetChildren()) do
-        if obj:GetAttribute("FPSESPManaged") then
+        if obj:IsA("Highlight") and obj:GetAttribute("FPSESPManaged") then
             pcall(function() obj:Destroy() end)
         end
     end
 end
 
-UpdateESP=function()
-    if not Config.ESP then
-        ClearAllESP()
+local function GetBounds(cam,char,view)
+    local ok,cf,size=pcall(function() return char:GetBoundingBox() end)
+    if not ok then return nil end
+    local hx,hy,hz=size.X*.5,size.Y*.5,size.Z*.5
+    local minX,minY=math.huge,math.huge
+    local maxX,maxY=-math.huge,-math.huge
+    local count=0
+    for sx=-1,1,2 do for sy=-1,1,2 do for sz=-1,1,2 do
+        local p=cam:WorldToViewportPoint((cf*CFrame.new(sx*hx,sy*hy,sz*hz)).Position)
+        if p.Z>0 then
+            count=count+1
+            minX=math.min(minX,p.X); minY=math.min(minY,p.Y)
+            maxX=math.max(maxX,p.X); maxY=math.max(maxY,p.Y)
+        end
+    end end end
+    if count==0 or maxX-minX<4 or maxY-minY<8 then return nil end
+    return math.clamp(minX,-100,view.X+100),math.clamp(minY,-100,view.Y+100),math.clamp(maxX,-100,view.X+100),math.clamp(maxY,-100,view.Y+100)
+end
+
+local function UpdateBox(e,b,color)
+    if not Config.ESPBoxes or not b then
+        for _,pair in ipairs(e.box) do HideObject(pair.main); HideObject(pair.shadow) end
         return
     end
+    local minX,minY,maxX,maxY=b
+    local w,h=maxX-minX,maxY-minY
+    local c=math.clamp(math.min(w*.25,h*.18),8,30)
+    local t=math.clamp(math.min(w,h)*.014,2,3)
+    local defs={
+        {minX,minY,minX+c,minY},{minX,minY,minX,minY+c},
+        {maxX-c,minY,maxX,minY},{maxX,minY,maxX,minY+c},
+        {minX,maxY,minX+c,maxY},{minX,maxY-c,minX,maxY},
+        {maxX-c,maxY,maxX,maxY},{maxX,maxY-c,maxX,maxY},
+    }
+    for i,d in ipairs(defs) do
+        local pair=e.box[i]
+        SetLine(pair.shadow,Vector2.new(d[1]+1,d[2]+1),Vector2.new(d[3]+1,d[4]+1),t+1,Color3.new(0,0,0))
+        SetLine(pair.main,Vector2.new(d[1],d[2]),Vector2.new(d[3],d[4]),t,color)
+    end
+end
 
+local function UpdateTracer(e,point,color,view)
+    if not Config.ESPTracers or not point or point.X<0 or point.X>view.X or point.Y<0 or point.Y>view.Y then
+        HideObject(e.tracer.main); HideObject(e.tracer.shadow); return
+    end
+    local from=Vector2.new(view.X*.5,view.Y-2)
+    SetLine(e.tracer.shadow,from+Vector2.new(1,1),point+Vector2.new(1,1),4,Color3.new(0,0,0))
+    SetLine(e.tracer.main,from,point,2,color)
+end
+
+local function UpdateSkeleton(e,char,color,cam,view)
+    local defs=char:FindFirstChild("UpperTorso") and R15Bones or R6Bones
+    if not Config.ESPSkeleton then
+        for _,line in ipairs(e.skeleton) do HideObject(line) end
+        return
+    end
+    for i,line in ipairs(e.skeleton) do
+        local pair=defs[i]
+        if not pair then HideObject(line) else
+            local a=char:FindFirstChild(pair[1]); local b=char:FindFirstChild(pair[2])
+            if a and b then
+                local pa=cam:WorldToViewportPoint(a.Position); local pb=cam:WorldToViewportPoint(b.Position)
+                if pa.Z>0 and pb.Z>0 and pa.X>-100 and pa.X<view.X+100 and pa.Y>-100 and pa.Y<view.Y+100 and pb.X>-100 and pb.X<view.X+100 and pb.Y>-100 and pb.Y<view.Y+100 then
+                    SetLine(line,Vector2.new(pa.X,pa.Y),Vector2.new(pb.X,pb.Y),1.75,color)
+                else HideObject(line) end
+            else HideObject(line) end
+        end
+    end
+end
+
+local function UpdateArrow(e,point,color,view,behind)
+    if not Config.ESPOffscreen or not point then HideObject(e.arrow); return end
+    local center=Vector2.new(view.X*.5,view.Y*.5)
+    local d=Vector2.new(point.X,point.Y)-center
+    if behind then d=-d end
+    if d.Magnitude<1 then HideObject(e.arrow); return end
+    local n=d.Unit
+    local maxX=view.X*.5-28; local maxY=view.Y*.5-28
+    local tx=math.abs(n.X)>0.001 and maxX/math.abs(n.X) or math.huge
+    local ty=math.abs(n.Y)>0.001 and maxY/math.abs(n.Y) or math.huge
+    local p=center+n*math.min(tx,ty)
+    e.arrow.Position=UDim2.fromOffset(p.X,p.Y)
+    e.arrow.Rotation=math.deg(math.atan2(n.Y,n.X))+90
+    e.arrow.TextColor3=color
+    e.arrow.Visible=true
+end
+
+UpdateESP=function()
+    if not Config.ESP then ClearAllESP(); return end
     local cam=workspace.CurrentCamera
     local mine=Character()
     local myRoot=mine and mine:FindFirstChild("HumanoidRootPart")
-    if not cam or not myRoot then
-        ClearAllESP()
-        return
-    end
-
+    if not cam or not myRoot then ClearAllESP(); return end
     local view=cam.ViewportSize
-    local localPosition=myRoot.Position
+    local origin=myRoot.Position
     local seen={}
-
-    for _,player in ipairs(espPlayerCache) do
-        local char=player.Character
-        local hum=char and char:FindFirstChildOfClass("Humanoid")
-        local root=char and char:FindFirstChild("HumanoidRootPart")
-        local head=char and char:FindFirstChild("Head")
-
-        if char and hum and root and hum.Health>0 then
-            local distance=(root.Position-localPosition).Magnitude
-            if distance<=Config.ESPMaxDistance then
-                local e=espObjects[player]
-                if not e or e.character~=char then
-                    e=BuildESP(player,char)
-                end
-
-                if e then
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player~=LocalPlayer then
+            local char=player.Character
+            local hum=char and char:FindFirstChildOfClass("Humanoid")
+            local root=char and char:FindFirstChild("HumanoidRootPart")
+            local head=char and char:FindFirstChild("Head")
+            if char and hum and hum.Health>0 and root then
+                local distance=(root.Position-origin).Magnitude
+                if distance<=Config.ESPMaxDistance then
+                    local e=BuildEntry(player,char)
                     seen[player]=true
-                    ESPHideAll(e)
-
-                    local color=GetESPColor(player)
+                    local color=ESPColor(player)
                     e.highlight.Adornee=char
                     e.highlight.FillColor=color
                     e.highlight.OutlineColor=color
-                    e.highlight.Enabled=Config.ESPHighlight
-                    e.accent.BackgroundColor3=color
-                    e.teamDot.BackgroundColor3=color
-                    e.headDot.BackgroundColor3=color
-                    e.arrow.TextColor3=color
+                    e.highlight.Enabled=Config.ESP
+                    HideObject(e.card); HideObject(e.headDot); HideObject(e.arrow)
+                    for _,pair in ipairs(e.box) do HideObject(pair.main); HideObject(pair.shadow) end
+                    HideObject(e.tracer.main); HideObject(e.tracer.shadow)
+                    for _,line in ipairs(e.skeleton) do HideObject(line) end
 
-                    local root2d,rootZ,rootOn=ProjectPoint(cam,root.Position)
-                    local head2d,headZ,headOn=head and ProjectPoint(cam,head.Position) or root2d,rootZ,rootOn
-                    local inFront=rootZ>0
-                    local onScreen=inFront and rootOn and
-                        root2d.X>=0 and root2d.X<=view.X and root2d.Y>=0 and root2d.Y<=view.Y
+                    local rootP=cam:WorldToViewportPoint(root.Position)
+                    local headP=head and cam:WorldToViewportPoint(head.Position) or rootP
+                    local inFront=rootP.Z>0
+                    local onScreen=inFront and rootP.X>=0 and rootP.X<=view.X and rootP.Y>=0 and rootP.Y<=view.Y
 
                     if onScreen then
-                        local cardOn=Config.ESPNames or Config.ESPHealth or Config.ESPDistance
-                        e.card.Visible=cardOn
-                        e.card.Position=UDim2.fromOffset(head2d.X,math.max(10,head2d.Y-18))
-
-                        e.name.Visible=Config.ESPNames
-                        e.user.Visible=Config.ESPNames
-                        e.dist.Visible=Config.ESPDistance
-                        e.dist.Text=string.format("%d studs",math.floor(distance+.5))
-
-                        local maxHealth=math.max(hum.MaxHealth,1)
-                        local health=math.clamp(hum.Health,0,maxHealth)
-                        local ratio=health/maxHealth
-                        e.hpBack.Visible=Config.ESPHealth
-                        e.hpFill.Visible=Config.ESPHealth
-                        e.hpText.Visible=Config.ESPHealth
-                        e.hpFill.Size=UDim2.new(ratio,0,1,0)
-                        e.hpFill.BackgroundColor3=Color3.new(1-ratio,ratio,0)
-                        e.hpText.Text=string.format("%d / %d",math.floor(health+.5),math.floor(maxHealth+.5))
-                        e.teamDot.Visible=Config.ESPTeamColor
-
-                        e.headDot.Visible=Config.ESPHeadDot and head~=nil and headZ>0
-                        if e.headDot.Visible then
-                            e.headDot.Position=UDim2.fromOffset(head2d.X,head2d.Y)
+                        if Config.ESPNames or Config.ESPDistance or Config.ESPHealth then
+                            e.card.Visible=true
+                            e.card.Position=UDim2.fromOffset(headP.X,headP.Y-12)
                         end
-
-                        local minX,minY,maxX,maxY=GetCharacterBounds(cam,char,view)
-                        UpdateBox(e,minX,minY,maxX,maxY,color)
-                        UpdateTracer(e,head2d,color,view)
+                        e.name.Visible=Config.ESPNames
+                        e.name.Text=player.DisplayName
+                        e.dist.Visible=Config.ESPDistance
+                        e.dist.Text=string.format("%d",math.floor(distance+.5))
+                        local ratio=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1)
+                        e.hpBack.Visible=Config.ESPHealth; e.hp.Visible=Config.ESPHealth; e.hpText.Visible=Config.ESPHealth
+                        e.hp.Size=UDim2.new(ratio,0,1,0)
+                        e.hp.BackgroundColor3=Color3.new(1-ratio,ratio,0)
+                        e.hpText.Text=string.format("%d / %d",math.floor(hum.Health+.5),math.floor(hum.MaxHealth+.5))
+                        e.headDot.Visible=Config.ESPHeadDot and headP.Z>0
+                        if e.headDot.Visible then e.headDot.Position=UDim2.fromOffset(headP.X,headP.Y); e.headDot.BackgroundColor3=color end
+                        local b={GetBounds(cam,char,view)}
+                        UpdateBox(e,#b==4 and b or nil,color)
+                        UpdateTracer(e,Vector2.new(rootP.X,rootP.Y),color,view)
                         UpdateSkeleton(e,char,color,cam,view)
                     else
-                        UpdateBox(e,nil,nil,nil,nil,color)
-                        UpdateTracer(e,nil,color,view)
-                        UpdateSkeleton(e,char,color,cam,view)
-                        if e.skeleton then for _,line in ipairs(e.skeleton) do ESPHide(line) end end
-                        if e.box then for _,line in ipairs(e.box) do ESPHide(line) end end
-
-                        local arrowPoint=head and head2d or root2d
-                        UpdateArrow(e,arrowPoint,color,view,not inFront)
-                    end
-
-                    -- If every screen primitive for this player is disabled,
-                    -- there is no reason to keep the root alive visually.
-                    if not e.card.Visible and not e.headDot.Visible and not e.arrow.Visible
-                        and not Config.ESPBoxes and not Config.ESPTracers and not Config.ESPSkeleton then
-                        e.highlight.Enabled=false
+                        UpdateArrow(e,headP,color,view,not inFront)
                     end
                 end
             end
         end
     end
-
-    for player,e in pairs(espObjects) do
-        if not seen[player] then
-            ESPHideAll(e)
-        end
+    for player in pairs(espObjects) do
+        if not seen[player] then RemoveESP(player) end
     end
 end
 
-local function HookPlayer(player)
+local function HookPlayerESP(player)
     if player==LocalPlayer then return end
-
-    player.CharacterAdded:Connect(function()
-        task.defer(function()
-            RemoveESP(player)
-            if Config.ESP and player.Character then
-                BuildESP(player,player.Character)
-            end
-        end)
-    end)
-
-    player.CharacterRemoving:Connect(function()
+    player.CharacterAdded:Connect(function(char)
         RemoveESP(player)
+        if Config.ESP then task.defer(function() if player.Character==char then BuildEntry(player,char) end end) end
     end)
-
-    if Config.ESP and player.Character then
-        BuildESP(player,player.Character)
-    end
+    player.CharacterRemoving:Connect(function() RemoveESP(player) end)
 end
+for _,player in ipairs(Players:GetPlayers()) do HookPlayerESP(player) end
+Players.PlayerAdded:Connect(HookPlayerESP)
+Players.PlayerRemoving:Connect(RemoveESP)
 
-for _,player in ipairs(Players:GetPlayers()) do HookPlayer(player) end
-Players.PlayerAdded:Connect(HookPlayer)
-Players.PlayerRemoving:Connect(function(player) RemoveESP(player) end)
 
 local fpsValue=60
 local fpsAccum=0
@@ -1897,7 +1702,7 @@ RunService:BindToRenderStep(MAIN_RENDER_NAME,Enum.RenderPriority.Character.Value
         pcall(function() LocalPlayer:SetAttribute("FPSPanelSprint",lastSprintState) end)
     end
 
-    if espT>=Config.ESPUpdateRate then
+    if espT>=math.max(0.03,tonumber(Config.ESPUpdateRate) or 0.06) then
         espT=0
         if Config.ESP or next(espObjects) then UpdateESP() end
     end
